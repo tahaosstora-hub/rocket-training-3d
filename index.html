@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arabic Keyboard Parkour 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:Arial,sans-serif}
+#hud{position:fixed;z-index:5;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none;color:white;font-weight:700}
+.badge{background:#111b;border:1px solid #ffffff33;border-radius:12px;padding:9px 13px}
+#game{width:100%;height:100%}#mobile{position:fixed;z-index:6;bottom:18px;left:0;right:0;display:flex;justify-content:center;gap:12px;direction:ltr}
+button{font-size:22px;font-weight:800;border:0;border-radius:14px;padding:13px 20px;background:#ffffffdd;touch-action:none}
+#msg{position:fixed;z-index:10;inset:0;display:none;place-items:center;background:#0008;color:#fff;text-align:center}
+.panel{background:#181818;padding:25px;border-radius:18px;max-width:330px}.panel button{margin-top:12px;font-size:16px}
+</style>
+</head>
+<body>
+<div id="hud"><div class="badge">🎹 Arabic Keyboard 3D</div><div class="badge">Level: <span id="level">1</span> | Falls: <span id="falls">0</span></div></div>
+<div id="game"></div>
+<div id="mobile"><button id="l">←</button><button id="j">↑</button><button id="r">→</button></div>
+<div id="msg"><div class="panel"><div id="text"></div><button id="again">عاود من اللول</button></div></div>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x8bc5e8);
+scene.fog=new THREE.Fog(0x8bc5e8,45,120);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,300);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled=true;
+document.getElementById("game").appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x557755,2));
+const sun=new THREE.DirectionalLight(0xffffff,2.2);sun.position.set(15,30,10);sun.castShadow=true;scene.add(sun);
+
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(180,180),new THREE.MeshStandardMaterial({color:0x4d8047}));
+ground.rotation.x=-Math.PI/2;ground.position.y=-2;scene.add(ground);
+
+const keys=["ض","ص","ث","ق","ف","غ","ع","ه","خ","ح","ج","د","ش","س","ي","ب","ل","ا","ت","ن","م","ك","ط","و","ز","ر","ذ","ء","ئ","ة"];
+const keyGroup=new THREE.Group();scene.add(keyGroup);
+const mats=[0x263238,0x37474f,0x455a64];
+for(let i=0;i<keys.length;i++){
+ const row=Math.floor(i/10),col=i%10;
+ const g=new THREE.Group();
+ const base=new THREE.Mesh(new THREE.BoxGeometry(3.7,.65,3.7),new THREE.MeshStandardMaterial({color:mats[row%3],roughness:.7}));
+ base.castShadow=true;base.receiveShadow=true;
+ const label=new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
+ label.position.y=.36;label.rotation.x=-Math.PI/2;
+ const c=document.createElement("canvas");c.width=256;c.height=256;const x=c.getContext("2d");x.fillStyle="#eee";x.font="bold 150px Arial";x.textAlign="center";x.textBaseline="middle";x.fillText(keys[i],128,135);
+ label.material.map=new THREE.CanvasTexture(c);label.material.needsUpdate=true;
+ g.add(base,label);g.position.set((col-4.5)*4.1,.0,(row)*4.4);keyGroup.add(g);
+}
+
+const platforms=[];
+function platform(x,y,z,w=8,d=5,color=0x9a744e){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,1,d),new THREE.MeshStandardMaterial({color}));
+ m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;scene.add(m);platforms.push({m,w,d});return m;
+}
+platform(0,1,-5,9,7); platform(8,3,-12,7,5); platform(-2,5,-19,7,5); platform(9,7,-26,7,5); platform(0,9,-34,9,6);
+platform(-10,11,-42,8,5); platform(0,13,-50,9,6); platform(11,15,-59,9,6);
+
+const finish=platform(11,17,-68,10,7,0x4caf50);
+const flag=new THREE.Mesh(new THREE.BoxGeometry(.35,7,.35),new THREE.MeshStandardMaterial({color:0xeeeeee}));flag.position.set(11,21,-68);scene.add(flag);
+const cloth=new THREE.Mesh(new THREE.PlaneGeometry(4,2.5),new THREE.MeshStandardMaterial({color:0xe53935,side:THREE.DoubleSide}));cloth.position.set(13,22,-68);scene.add(cloth);
+
+const player=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.65,1.2,6,12),new THREE.MeshStandardMaterial({color:0x1976d2}));body.position.y=1.2;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.55,16,12),new THREE.MeshStandardMaterial({color:0xffc7a0}));head.position.y=2.45;head.castShadow=true;player.add(head);
+scene.add(player);
+
+let vel=new THREE.Vector3(),spawn=new THREE.Vector3(0,2.2,-5),onGround=false,dead=false,level=1,falls=0;
+let input={l:false,r:false,j:false};
+function reset(){player.position.copy(spawn);vel.set(0,0,0);dead=false;document.getElementById("msg").style.display="none"}
+function die(){if(dead)return;dead=true;falls++;document.getElementById("falls").textContent=falls;document.getElementById("text").textContent="💀 طحتي! رجعتي للبداية";document.getElementById("msg").style.display="grid"}
+function win(){if(level===1){level=2;document.getElementById("level").textContent=2;spawn.set(11,18,-68);document.getElementById("text").textContent="🎉 دزتي Level 1! Level 2 تحلات";document.getElementById("msg").style.display="grid";}else{document.getElementById("text").textContent="🏆 كملتي Level 2!";document.getElementById("msg").style.display="grid"}}
+function key(el,on,off){el.addEventListener("pointerdown",e=>{e.preventDefault();on()});el.addEventListener("pointerup",off);el.addEventListener("pointercancel",off);el.addEventListener("pointerleave",off)}
+key(document.getElementById("l"),()=>input.l=true,()=>input.l=false);
+key(document.getElementById("r"),()=>input.r=true,()=>input.r=false);
+key(document.getElementById("j"),()=>input.j=true,()=>input.j=false);
+addEventListener("keydown",e=>{if(e.key==="ArrowLeft"||e.key==="a")input.l=true;if(e.key==="ArrowRight"||e.key==="d")input.r=true;if(e.key==="ArrowUp"||e.key==="w"||e.key===" ")input.j=true});
+addEventListener("keyup",e=>{if(e.key==="ArrowLeft"||e.key==="a")input.l=false;if(e.key==="ArrowRight"||e.key==="d")input.r=false;if(e.key==="ArrowUp"||e.key==="w"||e.key===" ")input.j=false});
+document.getElementById("again").onclick=reset;
+
+const clock=new THREE.Clock();
+function loop(){
+ requestAnimationFrame(loop);const dt=Math.min(clock.getDelta(),.033);
+ if(!dead){
+  const speed=9;vel.x+=(input.r?speed:-input.l? -speed:0)*dt;vel.x*=.86;vel.z=-7;
+  if(input.j&&onGround){vel.y=12;onGround=false}
+  vel.y-=28*dt;player.position.addScaledVector(vel,dt);
+  onGround=false;
+  for(const p of platforms){const b=p.m.position; if(Math.abs(player.position.x-b.x)<p.w/2+.7&&Math.abs(player.position.z-b.z)<p.d/2+.7&&player.position.y>=b.y-.2&&player.position.y<=b.y+1.2&&vel.y<=0){player.position.y=b.y+1.05;vel.y=0;onGround=true}}
+  if(player.position.y<-5)die();
+  if(player.position.z<-64&&player.position.y>15)win();
+ }
+ const target=new THREE.Vector3(player.position.x,player.position.y+5,player.position.z+12);
+ camera.position.lerp(new THREE.Vector3(player.position.x,player.position.y+8,player.position.z+15),.08);camera.lookAt(target);
+ renderer.render(scene,camera);
+}
+reset();loop();
+addEventListener("resize",()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body></html>
