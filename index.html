@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Rocket Training 3D</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif;background:#07101c;color:white;touch-action:none}
+#game{position:fixed;inset:0;background:linear-gradient(#102b45,#07111d 48%,#0a121b)}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;top:14px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:flex-start;z-index:5;text-shadow:0 2px 5px #000}
+.title{font-size:25px;font-weight:900;letter-spacing:.5px}.sub{font-size:15px;margin-top:5px}
+.score{display:flex;align-items:center;gap:0;font-size:32px;font-weight:900;border-radius:10px;overflow:hidden;box-shadow:0 5px 18px #0008}
+.score span{padding:8px 22px}.red{background:#d9272e}.green{background:#18a84a}.timer{background:#172332;padding:8px 18px}
+.controls{position:absolute;inset:0;z-index:6;pointer-events:none}
+.joy{position:absolute;left:34px;bottom:28px;width:150px;height:150px;border-radius:50%;border:3px solid #ffffff55;background:#10192399;box-shadow:inset 0 0 25px #000,0 5px 15px #0008;pointer-events:auto}
+.stick{position:absolute;left:48px;top:48px;width:52px;height:52px;border-radius:50%;background:#d9d9d9aa;border:2px solid #fff8;box-shadow:0 3px 10px #000}
+.arrow{position:absolute;font-size:22px;color:#fff9}.up{top:9px;left:64px}.down{bottom:8px;left:64px}.left{left:10px;top:61px}.right{right:10px;top:61px}
+button{font:900 18px Arial;color:#fff;border:2px solid #ffffff55;background:#162536d9;border-radius:20px;box-shadow:0 5px 15px #0008}
+.jump{position:absolute;right:34px;bottom:42px;width:125px;height:125px;border-radius:50%;font-size:20px;pointer-events:auto}
+.jump b{display:block;font-size:30px;margin-bottom:4px}.reset{position:absolute;right:24px;bottom:24px;transform:translateY(150px);padding:12px 20px;pointer-events:auto}
+.gear{position:absolute;right:18px;top:16px;font-size:27px;opacity:.9}
+.tip{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-size:12px;color:#ffffff88;z-index:5}
+@media(max-width:600px){.title{font-size:20px}.score span{padding:6px 12px;font-size:25px}.joy{width:130px;height:130px;left:18px;bottom:18px}.stick{left:39px;top:39px}.up{left:54px}.down{left:54px}.jump{right:18px;bottom:25px;width:105px;height:105px}.gear{right:10px;top:10px}}
+</style>
+</head>
+<body>
+<div id="game"><canvas id="c"></canvas>
+<div class="hud"><div><div class="title">ROCKET TRAINING 3D</div><div class="sub">Training — تدريب</div></div>
+<div class="score"><span class="red" id="rs">0</span><span class="timer" id="tm">5:00</span><span class="green" id="gs">0</span></div></div>
+<div class="gear">⚙</div>
+<div class="controls">
+<div class="joy" id="joy"><i class="arrow up">▲</i><i class="arrow down">▼</i><i class="arrow left">◀</i><i class="arrow right">▶</i><div class="stick" id="stick"></div></div>
+<button class="jump" id="jump"><b>⬆</b>JUMP</button>
+</div><div class="tip">Drag the joystick to drive • Jump to hit the ball</div>
+</div>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');let W,H,D=0,car={x:0,z:8,a:0,vy:0},ball={x:0,z:-5,vx:0,vz:0,vy:0},time=300;
+function resize(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;x.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);W=innerWidth;H=innerHeight}addEventListener('resize',resize);resize();
+function poly(p,fill,stroke){x.beginPath();p.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));x.closePath();x.fillStyle=fill;x.fill();if(stroke){x.strokeStyle=stroke;x.stroke()}}
+function line(a,b,col,w=2){x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(...a);x.lineTo(...b);x.stroke()}
+function project(X,Z,Y=0){let sy=H*.52+(Z*.045-Y*.11)*H;let scale=1/(1+Z*.018);return [W/2+X*scale*W*.055,sy]}
+function field(){
+x.fillStyle='#78b7dc';x.fillRect(0,0,W,H*.54);
+let horizon=H*.30; x.fillStyle='#101b27';x.fillRect(0,horizon,W,H-horizon);
+for(let r=0;r<8;r++){let yy=horizon+r*r*H*.018; x.fillStyle=r%2?'#172331':'#1d2b3a';x.fillRect(0,yy,W,H*.035)}
+let p1=project(-18,35),p2=project(18,35),p3=project(22,-30),p4=project(-22,-30);poly([p1,p2,p3,p4],'#168f48','#fff');
+let mid=project(0,0);line(project(-22,0),project(22,0),'#fff',3);
+for(let z=-30;z<=30;z+=5) line(project(-22,z),project(22,z),'#ffffff10',1);
+x.save();x.globalAlpha=.75;
+for(let i=0;i<9;i++){let yy=horizon+25+i*18; x.fillStyle=i<4?'#b51e29':'#167f3c';x.fillRect(0,yy,W,10)}
+x.restore();
+goal(-22,'#e52a32');goal(22,'#1bd34e');
+}
+function goal(side,col){let z=-27,base=project(side,z),w=project(side+(side<0?5:-5),z),top=project(side,z,5);line(base,top,col,7);line(top,w,col,7);line(w,base,col,7)}
+function ballDraw(){let p=project(ball.x,ball.z,ball.vy);let r=Math.max(7,18/(1+ball.z*.02));x.beginPath();x.arc(p[0],p[1],r,0,7);x.fillStyle='#e9eef2';x.shadowBlur=10;x.shadowColor='#000';x.fill();x.shadowBlur=0;x.strokeStyle='#555';x.stroke()}
+function carDraw(){let p=project(car.x,car.z,0);let s=1/(1+car.z*.018)*1.4,ww=92*s,hh=48*s;x.save();x.translate(p[0],p[1]);x.rotate(car.a*.35);x.shadowBlur=15;x.shadowColor='#0009';
+x.fillStyle='#d8c900';x.beginPath();x.roundRect(-ww/2,-hh,ww,hh,10);x.fill();x.fillStyle='#20252a';x.beginPath();x.roundRect(-ww*.30,-hh*.78,ww*.6,hh*.32,5);x.fill();
+x.fillStyle='#111';x.fillRect(-ww*.45,-hh*.08,ww*.18,hh*.18);x.fillRect(ww*.27,-hh*.08,ww*.18,hh*.18);x.restore()}
+let keys={};addEventListener('keydown',e=>keys[e.key]=1);addEventListener('keyup',e=>keys[e.key]=0);
+let dx=0,dz=0,drag=false;
+const joy=document.getElementById('joy'),stick=document.getElementById('stick');
+function joyMove(e){let r=joy.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left-r.width/2,py=(e.touches?e.touches[0].clientY:e.clientY)-r.top-r.height/2,m=Math.hypot(px,py),q=r.width*.36;if(m>q){px*=q/m;py*=q/m}stick.style.transform=`translate(${px}px,${py}px)`;dx=px/q;dz=py/q}
+joy.addEventListener('pointerdown',e=>{drag=true;joyMove(e)});addEventListener('pointermove',e=>drag&&joyMove(e));addEventListener('pointerup',()=>{drag=false;dx=dz=0;stick.style.transform='translate(0,0)'});
+document.getElementById('jump').onclick=()=>{if(Math.abs(car.vy)<.1)car.vy=7};
+function reset(){car={x:0,z:8,a:0,vy:0};ball={x:0,z:-5,vx:0,vz:0,vy:0};time=300}
+function update(dt){let f=-(dz||keys.w?1:0),s=(dx||keys.d?1:0);car.x+=s*dt*8;car.z+=f*dt*10;car.x=Math.max(-20,Math.min(20,car.x));car.z=Math.max(-27,Math.min(27,car.z));car.vy-=18*dt;car.z-=0; if(car.vy){car._y=(car._y||0)+car.vy*dt;if(car._y<0){car._y=0;car.vy=0}}
+let bx=ball.x-car.x,bz=ball.z-car.z;if(Math.hypot(bx,bz)<2.4){ball.vx=bx*2;ball.vz=bz*2-8;ball.vy=4}
+ball.x+=ball.vx*dt;ball.z+=ball.vz*dt;ball.vx*=.985;ball.vz*=.985;ball.vy-=15*dt;if(ball.vy<0&&ball.z){ball.vy=0}
+if(ball.x>20||ball.x<-20)ball.vx*=-.7;if(ball.z>29||ball.z<-29){ball.vz*=-.7}
+time=Math.max(0,time-dt);document.getElementById('tm').textContent=Math.floor(time/60)+':'+String(Math.floor(time%60)).padStart(2,'0')}
+function draw(){x.clearRect(0,0,W,H);field();ballDraw();carDraw()}
+let last=performance.now();function loop(t){let dt=Math.min(.033,(t-last)/1000);last=t;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+</script></body></html>
