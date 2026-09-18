@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Arabic Keyboard Obby V2</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#bfc7cc;font-family:Arial,sans-serif;touch-action:none}
+canvas{display:block}
+#ver{position:fixed;top:8px;left:8px;z-index:50;background:#111;color:#fff;padding:5px 9px;border-radius:8px;font-size:11px}
+#joystick{position:fixed;left:22px;bottom:55px;width:132px;height:132px;border:3px solid #ffffff80;border-radius:50%;background:#ffffff20;z-index:50;display:none}
+#stick{position:absolute;left:34px;top:34px;width:64px;height:64px;border-radius:50%;background:#20c866;border:3px solid white}
+#jump{position:fixed;right:22px;bottom:65px;width:92px;height:92px;border:0;border-radius:50%;background:#397ff0;color:white;font-size:18px;font-weight:bold;z-index:50;display:none}
+@media(pointer:coarse){#joystick,#jump{display:block}}
+</style>
+</head>
+<body>
+<div id="ver">V2 — النسخة الجديدة</div>
+<div id="joystick"><div id="stick"></div></div>
+<button id="jump">قفز</button>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xc7cdd0);
+scene.fog=new THREE.Fog(0xc7cdd0,35,150);
+
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,250);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x52606b,2.4));
+const sun=new THREE.DirectionalLight(0xffffff,3);
+sun.position.set(-20,45,30);
+sun.castShadow=true;
+scene.add(sun);
+
+/* أرضية */
+const floor=new THREE.Mesh(
+ new THREE.PlaneGeometry(120,170),
+ new THREE.MeshStandardMaterial({color:0x9ca7ad,roughness:.95})
+);
+floor.rotation.x=-Math.PI/2;
+floor.position.y=-2.2;
+scene.add(floor);
+
+/* أزرار الكيبورد */
+const chars=["ض","ص","ث","ق","ف","غ","ع","ه","خ","ح","ج","د","ش","س","ي","ب","ل","ا","ت","ن","م","ك","ط","ئ","ء","ؤ","ر","لا","ى","ة","و","ز","ظ"];
+const colors=[0x19b9c7,0x3688e8,0xf0cf3c,0xed8c3b,0xd94fa4,0x79544c,0xeeeeee,0x54b94c];
+const buttons=[];
+
+function createButton(text,x,z){
+ const g=new THREE.Group();
+
+ const c=colors[Math.floor(Math.random()*colors.length)];
+ const material=new THREE.MeshStandardMaterial({color:c,roughness:.42});
+
+ const block=new THREE.Mesh(new THREE.BoxGeometry(3.0,1.15,2.55),material);
+ block.position.y=-1.62;
+ block.castShadow=true;
+ block.receiveShadow=true;
+ g.add(block);
+
+ const cap=new THREE.Mesh(new THREE.BoxGeometry(2.76,.25,2.31),
+   new THREE.MeshStandardMaterial({color:new THREE.Color(c).offsetHSL(0,0,.08),roughness:.35}));
+ cap.position.y=-1.02;
+ cap.castShadow=true;
+ g.add(cap);
+
+ const cv=document.createElement("canvas");
+ cv.width=256;cv.height=256;
+ const ctx=cv.getContext("2d");
+ ctx.fillStyle="#111";
+ ctx.font=(text.length>2?"bold 42px":"bold 82px")+" Arial";
+ ctx.textAlign="center";
+ ctx.textBaseline="middle";
+ ctx.fillText(text,128,132);
+
+ const label=new THREE.Mesh(
+   new THREE.PlaneGeometry(2.35,1.9),
+   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true})
+ );
+ label.rotation.x=-Math.PI/2;
+ label.position.y=-.86;
+ g.add(label);
+
+ g.position.set(x,0,z);
+ scene.add(g);
+
+ buttons.push({g,cap,label,baseY:-1.02,downY:-1.72,vel:0});
+}
+
+/* أكثر من 500 زر، متقاربين جدا */
+const COLS=20, ROWS=28;
+for(let r=0;r<ROWS;r++){
+ for(let c=0;c<COLS;c++){
+   const x=(c-(COLS-1)/2)*3.05 + (r%2?1.52:0);
+   const z=30-r*2.72;
+   createButton(chars[(r*COLS+c)%chars.length],x,z);
+ }
+}
+
+/* اللاعب: جسم بلوكي كامل، يدين ورجلين */
+const player=new THREE.Group();
+
+function cube(w,h,d,color){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.55}));
+ m.castShadow=true;
+ return m;
+}
+
+const torso=cube(1.5,1.7,.85,0x101827);
+torso.position.y=1.05;
+player.add(torso);
+
+const shirt=cube(.72,1.08,.9,0x1687e8);
+shirt.position.set(0,1.02,.44);
+player.add(shirt);
+
+const head=cube(1.22,1.22,1.22,0x9a5a2e);
+head.position.y=2.55;
+player.add(head);
+
+const armL=cube(.58,1.55,.65,0x101827);
+const armR=cube(.58,1.55,.65,0x101827);
+armL.position.set(-1.05,1.08,0);
+armR.position.set(1.05,1.08,0);
+player.add(armL,armR);
+
+const handL=cube(.62,.48,.7,0xe9e9e9);
+const handR=cube(.62,.48,.7,0xe9e9e9);
+handL.position.set(-1.05,.05,0);
+handR.position.set(1.05,.05,0);
+player.add(handL,handR);
+
+const legL=cube(.62,1.35,.68,0x111827);
+const legR=cube(.62,1.35,.68,0x111827);
+legL.position.set(-.4,-.4,0);
+legR.position.set(.4,-.4,0);
+player.add(legL,legR);
+
+const footL=cube(.7,.4,.95,0x151515);
+const footR=cube(.7,.4,.95,0x151515);
+footL.position.set(-.4,-1.27,-.1);
+footR.position.set(.4,-1.27,-.1);
+player.add(footL,footR);
+
+player.position.set(0,0,29);
+scene.add(player);
+
+/* تحكم */
+const keyState={};
+let joyX=0,joyY=0;
+let velocityY=0;
+let grounded=true;
+
+addEventListener("keydown",e=>{
+ keyState[e.key.toLowerCase()]=true;
+ if(e.code==="Space") jump();
+});
+addEventListener("keyup",e=>keyState[e.key.toLowerCase()]=false);
+
+function jump(){
+ if(grounded){
+   velocityY=10;
+   grounded=false;
+ }
+}
+
+/* الأنالوج */
+const joy=document.getElementById("joystick");
+const stick=document.getElementById("stick");
+
+function joystickMove(e){
+ const t=e.touches[0];
+ const r=joy.getBoundingClientRect();
+ let x=t.clientX-(r.left+r.width/2);
+ let y=t.clientY-(r.top+r.height/2);
+ const max=38;
+ const d=Math.hypot(x,y);
+ if(d>max){x=x/d*max;y=y/d*max}
+ joyX=x/max;
+ joyY=y/max;
+ stick.style.transform=`translate(${x}px,${y}px)`;
+}
+joy.addEventListener("touchstart",e=>{joystickMove(e);e.preventDefault()},{passive:false});
+joy.addEventListener("touchmove",e=>{joystickMove(e);e.preventDefault()},{passive:false});
+joy.addEventListener("touchend",()=>{joyX=joyY=0;stick.style.transform="translate(0,0)"});
+document.getElementById("jump").addEventListener("touchstart",e=>{jump();e.preventDefault()},{passive:false});
+document.getElementById("jump").addEventListener("click",jump);
+
+/* زر واحد ينزل فعليا تحت اللاعب */
+function pressButtons(dt){
+ for(const b of buttons){
+   const dx=player.position.x-b.g.position.x;
+   const dz=player.position.z-b.g.position.z;
+   const close=Math.hypot(dx,dz)<1.38;
+   const target=close ? b.downY : b.baseY;
+   b.vel+=(target-b.cap.position.y)*70*dt;
+   b.vel*=Math.pow(.002,dt);
+   b.cap.position.y+=b.vel*dt;
+   b.label.position.y=b.cap.position.y+.16;
+ }
+}
+
+let last=performance.now();
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min((now-last)/1000,.035);
+ last=now;
+
+ let x=joyX,z=joyY;
+ if(keyState.w||keyState.arrowup)z-=1;
+ if(keyState.s||keyState.arrowdown)z+=1;
+ if(keyState.a||keyState.arrowleft)x-=1;
+ if(keyState.d||keyState.arrowright)x+=1;
+
+ const len=Math.hypot(x,z);
+ if(len){
+   x/=len;z/=len;
+   player.position.x+=x*8.5*dt;
+   player.position.z+=z*8.5*dt;
+   player.rotation.y=Math.atan2(x,z);
+
+   const walk=Math.sin(now*.012);
+   armL.rotation.x=walk*.35;
+   armR.rotation.x=-walk*.35;
+   legL.rotation.x=-walk*.4;
+   legR.rotation.x=walk*.4;
+ }
+
+ /* الجاذبية */
+ velocityY-=25*dt;
+ player.position.y+=velocityY*dt;
+
+ /*
+   اللاعب واقف فوق سطح الزر.
+   سطح الزر = cap.y + نصف السمك.
+   لأن القدمين أسفل origin بحوالي 1.47، نحسب origin الصحيح.
+ */
+ let surface=-2.2;
+ for(const b of buttons){
+   const dx=player.position.x-b.g.position.x;
+   const dz=player.position.z-b.g.position.z;
+   if(Math.abs(dx)<1.38 && Math.abs(dz)<1.18){
+     const s=b.cap.position.y+.125;
+     if(s>surface)surface=s;
+   }
+ }
+ const playerFeet=-1.47;
+ const needed=surface-playerFeet;
+ if(player.position.y<=needed){
+   player.position.y=needed;
+   velocityY=0;
+   grounded=true;
+ }else{
+   grounded=false;
+ }
+
+ /* إذا طاح، يرجع للبداية */
+ if(player.position.y<-10){
+   player.position.set(0,0,29);
+   velocityY=0;
+   grounded=true;
+ }
+
+ player.position.x=Math.max(-31,Math.min(31,player.position.x));
+ player.position.z=Math.max(-48,Math.min(30,player.position.z));
+
+ pressButtons(dt);
+
+ /* كاميرا خلف اللاعب مثل الصورة */
+ const camTarget=new THREE.Vector3(player.position.x,5.4,player.position.z+8.5);
+ camera.position.lerp(camTarget,.12);
+ camera.lookAt(player.position.x,1.3,player.position.z-4);
+
+ renderer.render(scene,camera);
+}
+animate(performance.now());
+
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
