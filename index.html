@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Rocket Training 3D</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:Arial,sans-serif}
+#game{display:block;width:100%;height:100%}
+#ui{position:fixed;inset:0;pointer-events:none;color:#fff}
+#title{position:absolute;top:12px;left:14px;font-weight:700;text-shadow:0 2px 4px #000}
+#status{position:absolute;top:38px;left:14px;font-size:13px;text-shadow:0 2px 4px #000}
+#controls{position:absolute;left:0;right:0;bottom:18px;display:flex;justify-content:space-between;padding:0 18px;pointer-events:none}
+.pad{display:grid;grid-template-columns:repeat(3,54px);gap:7px;pointer-events:auto}
+button{width:54px;height:54px;border:1px solid #ffffff55;border-radius:14px;background:#0008;color:#fff;font-size:22px;font-weight:bold;touch-action:none}
+#actions{display:flex;gap:8px;align-items:end;pointer-events:auto}
+#actions button{font-size:14px}
+@media(min-width:700px){button{width:62px;height:62px}.pad{grid-template-columns:repeat(3,62px)}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="title">ROCKET TRAINING 3D</div>
+  <div id="status">Training — بلا وقت</div>
+  <div id="controls">
+    <div class="pad">
+      <span></span><button data-k="up">▲</button><span></span>
+      <button data-k="left">◀</button><button data-k="down">▼</button><button data-k="right">▶</button>
+    </div>
+    <div id="actions">
+      <button data-k="boost">BOOST</button>
+      <button data-k="jump">JUMP</button>
+      <button id="reset">RESET</button>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const canvas=document.getElementById('game');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87b7df);
+scene.fog=new THREE.Fog(0x87b7df,35,85);
+
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x31523a,1.8));
+const sun=new THREE.DirectionalLight(0xffffff,2.2); sun.position.set(10,25,10); sun.castShadow=true; scene.add(sun);
+
+const field=new THREE.Mesh(new THREE.BoxGeometry(44,.35,28),new THREE.MeshStandardMaterial({color:0x286b3b}));
+field.position.y=-.18; field.receiveShadow=true; scene.add(field);
+
+const lineMat=new THREE.MeshBasicMaterial({color:0xffffff});
+function line(x,z,w,d){const m=new THREE.Mesh(new THREE.BoxGeometry(w,.025,d),lineMat);m.position.set(x,.01,z);scene.add(m)}
+line(0,0,.12,28); line(0,0,44,.12);
+const circle=new THREE.Mesh(new THREE.RingGeometry(3.6,3.72,64),new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}));
+circle.rotation.x=-Math.PI/2; circle.position.y=.025; scene.add(circle);
+
+function goal(z,rot){const g=new THREE.Group(); const mat=new THREE.MeshStandardMaterial({color:0xffffff});
+for(const x of [-5,5]){const p=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,5),mat);p.position.set(x,1.7,0);g.add(p)}
+const bar=new THREE.Mesh(new THREE.BoxGeometry(10,.3,.3),mat);bar.position.y=3.4;g.add(bar);g.rotation.y=rot;g.position.z=z;scene.add(g)}
+goal(-14,0); goal(14,Math.PI);
+
+const car=new THREE.Group();
+const body=new THREE.Mesh(new THREE.BoxGeometry(2.2,.65,3.5),new THREE.MeshStandardMaterial({color:0x1769ff,metalness:.2,roughness:.5}));
+body.position.y=.65; body.castShadow=true; car.add(body);
+const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.45,.55,1.55),new THREE.MeshStandardMaterial({color:0x9fd6ff,transparent:true,opacity:.82}));
+cabin.position.set(0,1.08,-.15); cabin.castShadow=true; car.add(cabin);
+for(const x of [-1.15,1.15])for(const z of [-1.15,1.15]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.28,20),new THREE.MeshStandardMaterial({color:0x151515}));w.rotation.z=Math.PI/2;w.position.set(x,.38,z);car.add(w)}
+car.position.set(0,.05,8);scene.add(car);
+
+const ball=new THREE.Mesh(new THREE.SphereGeometry(1,32,20),new THREE.MeshStandardMaterial({color:0xf3f4f6,roughness:.35}));
+ball.position.set(0,1,0);ball.castShadow=true;scene.add(ball);
+
+const keys={up:false,down:false,left:false,right:false,boost:false};
+document.querySelectorAll('[data-k]').forEach(b=>{
+ const k=b.dataset.k;
+ const on=e=>{e.preventDefault();keys[k]=true};
+ const off=e=>{e.preventDefault();keys[k]=false};
+ b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointercancel',off); b.addEventListener('pointerleave',off);
+});
+addEventListener('keydown',e=>{const m={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Shift:'boost',Space:'jump'};if(m[e.code])keys[m[e.code]]=true});
+addEventListener('keyup',e=>{const m={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',Shift:'boost',Space:'jump'};if(m[e.code])keys[m[e.code]]=false});
+
+let speed=0,vy=0;
+function reset(){car.position.set(0,.05,8);car.rotation.set(0,0,0);speed=0;vy=0;ball.position.set(0,1,0);ball.userData.v=new THREE.Vector3()}
+document.getElementById('reset').onclick=reset;
+
+function update(dt){
+ const accel=keys.boost?22:13;
+ if(keys.up)speed=Math.min(speed+accel*dt,keys.boost?24:14);
+ else if(keys.down)speed=Math.max(speed-accel*dt,-8);
+ else speed*=Math.pow(.04,dt);
+ if(keys.left)car.rotation.y+=2.4*dt*(speed>=0?1:-1);
+ if(keys.right)car.rotation.y-=2.4*dt*(speed>=0?1:-1);
+ const dir=new THREE.Vector3(Math.sin(car.rotation.y),0,Math.cos(car.rotation.y));
+ car.position.addScaledVector(dir,speed*dt);
+ car.position.x=THREE.MathUtils.clamp(car.position.x,-20.5,20.5);
+ car.position.z=THREE.MathUtils.clamp(car.position.z,-12.5,12.5);
+ if(keys.jump && car.position.y<=.06)vy=8.5;
+ vy-=20*dt; car.position.y=Math.max(.05,car.position.y+vy*dt); if(car.position.y<=.051)vy=0;
+
+ const bv=ball.userData.v ||= new THREE.Vector3();
+ bv.y-=18*dt; ball.position.addScaledVector(bv,dt);
+ if(ball.position.y<1){ball.position.y=1;if(bv.y<0)bv.y*=-.62}
+ if(Math.abs(ball.position.x)>20.5){ball.position.x=Math.sign(ball.position.x)*20.5;bv.x*=-.75}
+ if(Math.abs(ball.position.z)>12.5){ball.position.z=Math.sign(ball.position.z)*12.5;bv.z*=-.75}
+ bv.multiplyScalar(Math.pow(.28,dt));
+
+ const dx=ball.position.x-car.position.x, dz=ball.position.z-car.position.z;
+ const dist=Math.hypot(dx,dz);
+ if(dist<2.25 && ball.position.y<2.7){
+   const n=new THREE.Vector3(dx,0,dz).normalize();
+   bv.addScaledVector(n,Math.max(5,Math.abs(speed)+7)*dt*5);
+   ball.position.x=car.position.x+n.x*2.3; ball.position.z=car.position.z+n.z*2.3;
+ }
+ camera.position.lerp(new THREE.Vector3(car.position.x- Math.sin(car.rotation.y)*8,car.position.y+5.2,car.position.z- Math.cos(car.rotation.y)*8),.12);
+ camera.lookAt(car.position.x,car.position.y+1,car.position.z);
+}
+let last=performance.now();
+function loop(t){const dt=Math.min((t-last)/1000,.033);last=t;update(dt);renderer.render(scene,camera);requestAnimationFrame(loop)}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+reset();loop(performance.now());
+</script>
+</body>
+</html>
